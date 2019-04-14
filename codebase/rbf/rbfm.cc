@@ -68,12 +68,12 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
 //    char* buffer = NULL;
 //    memcpy(buffer, data, sizeof(char));
 //    cout << "test success" << endl;
-    char * nullFieldsIndicator;
+    char * nullFieldsIndicator = (char *)malloc(1);
     memcpy(nullFieldsIndicator, (const char *)data, sizeof(char));
     int counter = 0;
-    bool nullBit;
-    for (unsigned int i = 0; i < recordDescriptor.size(); ++i){
-        nullBit = nullFieldsIndicator & (1 << (5));
+    bool nullBit = false;
+    for (unsigned int i = 0; i < recordDescriptor.size(); i++){
+        nullBit = nullFieldsIndicator[0] & (1 << (8-i-1));
         if (!nullBit){
             cout << recordDescriptor[i].name << " Attr Type: " << (AttrType)recordDescriptor[i].type << " Attr Len: " << recordDescriptor[i].length << endl;
 
@@ -81,6 +81,7 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
         else cout << recordDescriptor[i].name << ": " << "NULL  ";
         counter ++;
     }
+    printf("\n%d\n", nullFieldsIndicator[5]);
     cout << endl;
     return 0;
 }
