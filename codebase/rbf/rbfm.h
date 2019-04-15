@@ -16,7 +16,6 @@ typedef struct
   unsigned slotNum; // slot number in the page
 } RID;
 
-
 // Attribute
 typedef enum { TypeInt = 0, TypeReal, TypeVarChar } AttrType;
 
@@ -70,6 +69,11 @@ public:
 class RecordBasedFileManager
 {
 public:
+    struct TableSlot{
+        RID ridNum;
+        int offsetInBytes;
+    };
+    vector<TableSlot> tableIndex;
   static RecordBasedFileManager* instance();
 
   RC createFile(const string &fileName);

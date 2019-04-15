@@ -1,7 +1,9 @@
 #include "rbfm.h"
 #include <iostream>
 #include <cstring>
+#include <math.h>
 RecordBasedFileManager* RecordBasedFileManager::_rbf_manager = 0;
+
 
 RecordBasedFileManager* RecordBasedFileManager::instance()
 {
@@ -54,34 +56,123 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
 }
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
-    
+    int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
+    char * nullFieldsIndicator = (char *)malloc(actualByteForNullsIndicator);
+    memcpy(nullFieldsIndicator, (const char *)data, sizeof(char));
+    bool nullBit = false;
+    AttrType type;
+    int offset = actualByteForNullsIndicator;
+    TableSlot newSlot;
+    for (unsigned int i = 0; i < recordDescriptor.size(); i++){
+        nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
+        if (!nullBit){
+            type = (AttrType)recordDescriptor[i].type;
+            int *intNum = (int *)malloc(sizeof(int));
+            float *floatNum = (float *)malloc(sizeof(float));
+            char *varChar;
+            switch (type) {
+                case (TypeInt):
+                    memcpy(intNum, (const char *)data + offset, sizeof(int));
+                    offset += sizeof(int);
+                    break;
+                case (TypeReal):
+                    memcpy(floatNum, (const char *)data + offset, sizeof(float));
+                    offset += sizeof(float);
+                    break;
+                case (TypeVarChar):
+                    memcpy(intNum, (const char *)data + offset, sizeof(int));
+                    offset += sizeof(int);
+                    varChar = (char *)malloc(intNum[0] * sizeof(char));
+                    memcpy(varChar, (const char *)data + offset, intNum[0] * sizeof(char));
+                    offset += (intNum[0] * sizeof(char));
+                    free(varChar);
+                    break;
+                default:
+                    break;
+            }
+            free(intNum);
+            free(floatNum);
+        }
+    }
+//    if(tableIndex.size() != 0){
+//        newSlot.offsetInBytes = tableIndex.back().offsetInBytes + offset - 1;
+//        fseek (fileHandle.file , newSlot.offsetInBytes + 1, SEEK_SET);
+//    }
+//    else{
+//        newSlot.offsetInBytes = offset - 1;
+//        fseek(fileHandle.file , 0 , SEEK_SET);
+//    }
+//    newSlot.ridNum = rid;
+//    fwrite((const char *)data, sizeof(char), offset, fileHandle.file);
+//    tableIndex.push_back(newSlot);
+//    free(nullFieldsIndicator);
     return 0;
 }
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
-    return -1;
+    for(int i = 0; i < (int)tableIndex.size(); i++){
+        if(tableIndex[i].ridNum.pageNum == rid.pageNum && tableIndex[i].ridNum.slotNum == rid.slotNum){
+            if(i == 0){
+                fseek(fileHandle.file , 0 , SEEK_SET);
+                fread((char *)data, sizeof(char), tableIndex[i].offsetInBytes + 1, fileHandle.file);
+                
+            }
+            else{
+                fseek(fileHandle.file , tableIndex[i-1].offsetInBytes + 1 , SEEK_SET);
+                fread((char *)data, sizeof(char), tableIndex[i].offsetInBytes - tableIndex[i-1].offsetInBytes, fileHandle.file);
+            }
+        }
+        else{
+            perror("RID could not be found");
+            return -1;
+        }
+    }
+    return 0;
 }
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {
-    // (e.g., age: 24  height: 6.1  salary: 9000
-    //        age: NULL  height: 7.5  salary: 7500)
-//    char* buffer = NULL;
-//    memcpy(buffer, data, sizeof(char));
-//    cout << "test success" << endl;
-    char * nullFieldsIndicator = (char *)malloc(1);
+    int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
+    char * nullFieldsIndicator = (char *)malloc(actualByteForNullsIndicator);
     memcpy(nullFieldsIndicator, (const char *)data, sizeof(char));
-    int counter = 0;
     bool nullBit = false;
+    AttrType type;
+    int offset = actualByteForNullsIndicator;
+    int *intNum = (int *)malloc(sizeof(int));
+    float *floatNum = (float *)malloc(sizeof(float));
+    char *varChar;
     for (unsigned int i = 0; i < recordDescriptor.size(); i++){
-        nullBit = nullFieldsIndicator[0] & (1 << (8-i-1));
+        nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
         if (!nullBit){
-            cout << recordDescriptor[i].name << " Attr Type: " << (AttrType)recordDescriptor[i].type << " Attr Len: " << recordDescriptor[i].length << endl;
-
+            type = (AttrType)recordDescriptor[i].type;
+            switch (type) {
+                case (TypeInt):
+                    memcpy(intNum, (const char *)data + offset, sizeof(int));
+                    offset += sizeof(int);
+                    cout << recordDescriptor[i].name << ": " << floatNum[0] << "  ";
+                    break;
+                case (TypeReal):
+                    memcpy(floatNum, (const char *)data + offset, sizeof(float));
+                    offset += sizeof(float);
+                    cout << recordDescriptor[i].name << ": " << floatNum[0] << "  ";
+                    break;
+                case (TypeVarChar):
+                    memcpy(intNum, (const char *)data + offset, sizeof(int));
+                    offset += sizeof(int);
+                    varChar = (char *)malloc(intNum[0] * sizeof(char));
+                    memcpy(varChar, (const char *)data + offset, intNum[0] * sizeof(char));
+                    offset += (intNum[0] * sizeof(char));
+                    cout << recordDescriptor[i].name << ": " << varChar << "  ";
+                    break;
+                default:
+                    break;
+            }
         }
         else cout << recordDescriptor[i].name << ": " << "NULL  ";
-        counter ++;
     }
-    printf("\n%d\n", nullFieldsIndicator[5]);
     cout << endl;
+    free(intNum);
+    free(floatNum);
+    free(varChar);
+    free(nullFieldsIndicator);
     return 0;
 }
