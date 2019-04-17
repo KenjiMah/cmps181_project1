@@ -63,13 +63,13 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     AttrType type;
     int offset = actualByteForNullsIndicator;
     TableSlot newSlot;
+    int *intNum = (int *)malloc(sizeof(int));
+    float *floatNum = (float *)malloc(sizeof(float));
     for (unsigned int i = 0; i < recordDescriptor.size(); i++){
         nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
         if (!nullBit){
             type = (AttrType)recordDescriptor[i].type;
-            int *intNum = (int *)malloc(sizeof(int));
-            float *floatNum = (float *)malloc(sizeof(float));
-            char *varChar;
+            char * varChar;
             switch (type) {
                 case (TypeInt):
                     memcpy(intNum, (const char *)data + offset, sizeof(int));
@@ -82,7 +82,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
                 case (TypeVarChar):
                     memcpy(intNum, (const char *)data + offset, sizeof(int));
                     offset += sizeof(int);
-                    varChar = (char *)malloc(intNum[0] * sizeof(char));
+                    varChar = (char *)calloc(intNum[0], sizeof(char));
                     memcpy(varChar, (const char *)data + offset, intNum[0] * sizeof(char));
                     offset += (intNum[0] * sizeof(char));
                     free(varChar);
@@ -90,22 +90,27 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
                 default:
                     break;
             }
-            free(intNum);
-            free(floatNum);
         }
     }
-//    if(tableIndex.size() != 0){
-//        newSlot.offsetInBytes = tableIndex.back().offsetInBytes + offset - 1;
-//        fseek (fileHandle.file , newSlot.offsetInBytes + 1, SEEK_SET);
-//    }
-//    else{
-//        newSlot.offsetInBytes = offset - 1;
-//        fseek(fileHandle.file , 0 , SEEK_SET);
-//    }
-//    newSlot.ridNum = rid;
-//    fwrite((const char *)data, sizeof(char), offset, fileHandle.file);
-//    tableIndex.push_back(newSlot);
-//    free(nullFieldsIndicator);
+    cout << "this is the size of the offset " << offset <<endl;
+    if(tableIndex.size() != 0){
+        newSlot.offsetInBytes = tableIndex.back().offsetInBytes + offset;
+        fseek (fileHandle.file , newSlot.offsetInBytes + 1, SEEK_SET);
+        newSlot.ridNum.slotNum = tableIndex.back().ridNum.slotNum + 1;
+    }
+    else{
+        newSlot.offsetInBytes = offset - 1;
+        fseek(fileHandle.file , 0 , SEEK_SET);
+        newSlot.ridNum.slotNum = 1;
+    }
+    printRecord(recordDescriptor, (const void*)data);
+    cout << endl;
+    newSlot.ridNum.pageNum = 1;
+    fwrite((const char *)data, sizeof(char), offset, fileHandle.file);
+    tableIndex.push_back(newSlot);
+    free(intNum);
+    free(floatNum);
+    free(nullFieldsIndicator);
     return 0;
 }
 
@@ -148,7 +153,7 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
                 case (TypeInt):
                     memcpy(intNum, (const char *)data + offset, sizeof(int));
                     offset += sizeof(int);
-                    cout << recordDescriptor[i].name << ": " << floatNum[0] << "  ";
+                    cout << recordDescriptor[i].name << ": " << intNum[0] << "  ";
                     break;
                 case (TypeReal):
                     memcpy(floatNum, (const char *)data + offset, sizeof(float));
@@ -162,6 +167,7 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
                     memcpy(varChar, (const char *)data + offset, intNum[0] * sizeof(char));
                     offset += (intNum[0] * sizeof(char));
                     cout << recordDescriptor[i].name << ": " << varChar << "  ";
+                    free(varChar);
                     break;
                 default:
                     break;
@@ -170,9 +176,11 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
         else cout << recordDescriptor[i].name << ": " << "NULL  ";
     }
     cout << endl;
+    if(tableIndex.size()!= 0){
+        cout << tableIndex.back().offsetInBytes << endl;
+    }
     free(intNum);
     free(floatNum);
-    free(varChar);
     free(nullFieldsIndicator);
     return 0;
 }
