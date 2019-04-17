@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <iostream>
 
 PagedFileManager* PagedFileManager::_pf_manager = 0;
 
@@ -36,7 +37,7 @@ RC PagedFileManager::createFile(const string &fileName)
         fclose(fd);
         return -1;
     }
-    fd = fopen(c, "w");
+    fd = fopen(c, "w+b");
     if(fd == nullptr){
         fprintf(stderr, "Error: %s", strerror(errno));
         return -1;
@@ -78,6 +79,16 @@ RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle)
         fprintf(stderr, "Error: %s", strerror(errno));
         return -1;
     }
+    // void * buffer = malloc(sizeof(unsigned int));
+    fread(&fileHandle.readPageCounter, sizeof(unsigned), 1, fileHandle.file);
+    fread(&fileHandle.writePageCounter, sizeof(unsigned), 1, fileHandle.file);
+    fread(&fileHandle.appendPageCounter, sizeof(unsigned), 1, fileHandle.file);
+    fread(&fileHandle.pageCounter, sizeof(unsigned), 1, fileHandle.file);
+    cout << "READING " << fileHandle.readPageCounter << endl;
+    cout << fileHandle.pageCounter << endl;
+    cout << fileHandle.appendPageCounter << endl;
+    cout << fileHandle.writePageCounter << endl;
+
     return 0;
 }
 
@@ -88,6 +99,15 @@ RC PagedFileManager::closeFile(FileHandle &fileHandle)
         fprintf(stderr, "This file handle has no open file\n");
         return -1;
     }
+    // fseek(fileHandle.file, 0, SEEK_SET);
+    rewind(fileHandle.file);
+    fwrite(&fileHandle.readPageCounter, sizeof(unsigned int), 1, fileHandle.file);
+    // fseek(fileHandle.file, sizeof(unsigned), SEEK_SET);
+    fwrite(&fileHandle.writePageCounter, sizeof(unsigned int), 1, fileHandle.file);
+    // fseek(fileHandle.file, sizeof(unsigned), SEEK_CUR);
+    fwrite(&fileHandle.appendPageCounter, sizeof(unsigned int), 1, fileHandle.file);
+    // fseek(fileHandle.file, sizeof(unsigned), SEEK_CUR);
+    fwrite(&fileHandle.pageCounter, sizeof(unsigned), 1, fileHandle.file);
     if(fclose(fileHandle.file) != 0){
         fprintf(stderr, "Error: %s", strerror(errno));
         return -1;
@@ -110,22 +130,77 @@ FileHandle::~FileHandle()
 {
 }
 
+typedef struct{
+    int pageNum;
+
+}page;
+struct fileStats{
+    unsigned rpc = 0;
+    unsigned wpc = 0;
+    unsigned apc = 0;
+    unsigned pc = 0;
+};
 
 RC FileHandle::readPage(PageNum pageNum, void *data)
 {
+    if(pageNum >= pageCounter){
+        fprintf(stderr, "Invalid page number!\n");
+        return -1;
+    }
+    if(file == nullptr){
+        fprintf(stderr, "No file currently open\n");
+        return -1;
+    }
+    long offset = (pageNum * 4096) + 16;
+    if(fseek(file, offset, SEEK_SET) != 0){
+        fprintf(stderr, "Error: %s\n", strerror(errno));
+        return -1;
+    }
+    // cout << "Bytes read: " << fread(*&data, sizeof(unsigned), 4096, file) << endl;
+    if(fread(data, 4096, 1, file) != 1){
+        fprintf(stderr, "File corrupt!\n");
+        return -1;
+    };
+    readPageCounter++;
     return 0;
 }
 
 
 RC FileHandle::writePage(PageNum pageNum, const void *data)
 {
+    if(pageNum >= pageCounter){
+        fprintf(stderr, "Invalid page number!\n");
+        return -1;
+    }
+    if(file == nullptr){
+        fprintf(stderr, "No file currently open\n");
+        return -1;
+    }
+    long offset = (pageNum * 4096) + 16;
+    if(fseek(file, offset, SEEK_SET) != 0){
+        fprintf(stderr, "Error: %s\n", strerror(errno));
+        return -1;
+    }
+    fwrite(data, 4096, 1, file);
+    writePageCounter++;
     return 0;
 }
 
 
 RC FileHandle::appendPage(const void *data)
 {
-    
+    if(file == nullptr){
+        fprintf(stderr, "No file currently open\n");
+        return -1;
+    }
+    // Offset to pointing to the end of the new page
+    long offset = ((pageCounter) * 4096) + 16;
+    unsigned check = 0;
+    fseek(file, offset, SEEK_SET);
+    fwrite(data, 4096, 1, file);
+    // Write the table/array containing the freespace, etc...
+    // fwrite(&check, sizeof(unsigned),1,file);
+    appendPageCounter++;
     pageCounter ++;
     return 0;
 }
@@ -139,5 +214,8 @@ unsigned FileHandle::getNumberOfPages()
 
 RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount)
 {
-	return -1;
+    readPageCount = readPageCounter;
+    writePageCount = writePageCounter;
+    appendPageCount = appendPageCounter;
+	return 0;
 }
