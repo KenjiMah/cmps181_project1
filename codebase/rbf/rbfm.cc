@@ -23,20 +23,26 @@ RecordBasedFileManager::~RecordBasedFileManager()
 RC RecordBasedFileManager::createFile(const string &fileName) {
     const char * c = fileName.c_str();
     FILE* fd = fopen (c, "r");
-    if(fd == NULL){
-        FILE* fd = fopen (c, "w");
+    if(fd != nullptr){
+        fprintf(stderr, "Error: Attempting to create a file with the same name\n");
         fclose(fd);
-        return 0;
+        return -1;
+    }
+    fd = fopen(c, "w+b");
+    if(fd == nullptr){
+        fprintf(stderr, "Error: %s", strerror(errno));
+        return -1;
     }
     fclose(fd);
-    return -1;
+    return 0;
 }
 
 RC RecordBasedFileManager::destroyFile(const string &fileName) {
     const char * c = fileName.c_str();
     FILE* fd = fopen (c, "r");
-    if(fd == NULL){
-        return 0;
+    if(fd == nullptr){
+        fprintf(stderr, "Attempting to destroy file that does not exist!\n");
+        return -1;
     }
     fclose(fd);
     remove(c);
@@ -44,13 +50,55 @@ RC RecordBasedFileManager::destroyFile(const string &fileName) {
 }
 
 RC RecordBasedFileManager::openFile(const string &fileName, FileHandle &fileHandle) {
+    if(fileHandle.file != nullptr){
+        fprintf(stderr, "This file handle already has an open file!\n");
+        return -1;
+    }
     const char * c = fileName.c_str();
-    fileHandle.file = fopen(c, "rw+");
+    FILE* check = fopen(c, "r");
+    if(check == nullptr){
+        // fprintf(stderr, "Error: %s", strerror(errno));
+        fprintf(stderr, "Attempting to open file that does not exist!\n");
+        return -1;
+    }
+    fclose(check);
+    if((fileHandle.file = fopen(c, "rw+")) == nullptr){
+        fprintf(stderr, "Error: %s", strerror(errno));
+        return -1;
+    }
+    // void * buffer = malloc(sizeof(unsigned int));
+    // Reads in the counters that are stored in the first 16 bytes of the file
+    fread(&fileHandle.readPageCounter, sizeof(unsigned), 1, fileHandle.file);
+    fread(&fileHandle.writePageCounter, sizeof(unsigned), 1, fileHandle.file);
+    fread(&fileHandle.appendPageCounter, sizeof(unsigned), 1, fileHandle.file);
+    fread(&fileHandle.pageCounter, sizeof(unsigned), 1, fileHandle.file);
+    cout << "READING " << fileHandle.readPageCounter << endl;
+    cout << fileHandle.pageCounter << endl;
+    cout << fileHandle.appendPageCounter << endl;
+    cout << fileHandle.writePageCounter << endl;
+
     return 0;
 }
 
 RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
-    fclose(fileHandle.file);
+    if(fileHandle.file == nullptr){
+        fprintf(stderr, "This file handle has no open file\n");
+        return -1;
+    }
+    // fseek(fileHandle.file, 0, SEEK_SET);
+    rewind(fileHandle.file);
+    // Writes the updated counters to the page
+    fwrite(&fileHandle.readPageCounter, sizeof(unsigned int), 1, fileHandle.file);
+    // fseek(fileHandle.file, sizeof(unsigned), SEEK_SET);
+    fwrite(&fileHandle.writePageCounter, sizeof(unsigned int), 1, fileHandle.file);
+    // fseek(fileHandle.file, sizeof(unsigned), SEEK_CUR);
+    fwrite(&fileHandle.appendPageCounter, sizeof(unsigned int), 1, fileHandle.file);
+    // fseek(fileHandle.file, sizeof(unsigned), SEEK_CUR);
+    fwrite(&fileHandle.pageCounter, sizeof(unsigned), 1, fileHandle.file);
+    if(fclose(fileHandle.file) != 0){
+        fprintf(stderr, "Error: %s", strerror(errno));
+        return -1;
+    }
     return 0;
 }
 
@@ -113,7 +161,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             fieldNum ++;
         }
     }
-    printRecord(recordDescriptor, (const void*)data);
+    // printRecord(recordDescriptor, (const void*)data);
     cout << endl;
     free(intNum);
     free(nullFieldsIndicator);
@@ -121,7 +169,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     int x = 0;
     // malloc size for reading pages
     void * buffer = malloc(PAGE_SIZE);
-    cout << "testste" << endl;
+    // Checks the return code for any filehandle functions
+    int rc;
     // Check if there are any pages
     if(pc == 0){
         memcpy(buffer, writeBuffer, writeBufferOffset);
@@ -130,13 +179,16 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         newSlot->ridNum.slotNum = 1;
         newSlot->offsetInBytes = writeBufferOffset;
         memcpy((char *)buffer + 4076, newSlot, 12);
-        memset((char *)buffer + 4092, newSlot->offsetInBytes, 1);
-        memset((char *)buffer + 4088, 1, 1);
+        memcpy((char *)buffer + 4092, &newSlot->offsetInBytes, 4);
+        memcpy((char *)buffer + 4088, &newSlot->ridNum.slotNum, 4);
         rid = newSlot->ridNum;
-        fileHandle.appendPage(buffer);
+        rc = fileHandle.appendPage(buffer);
         free(buffer);
         free(newSlot);
         free(writeBuffer);
+        if(rc != 0){
+            return -1;
+        }
         return 0;
     }
     int* freeSpaceOffset;
@@ -148,23 +200,29 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         // gets the number of free space
         freeSpaceOffset =(int*) ((char*)buffer + 4092);
         slots = (unsigned *) ((char*)buffer + 4088);
+        cout << *slots << endl;
         freeSpace = (4096 - ((*slots + 1) * 12)) - *freeSpaceOffset;
         // checks if the freespace is enough
-        if(freeSpace > x){
+        if(freeSpace >= writeBufferOffset){
+            // cout << freeSpace << " free space" << endl;
+            // cout << "Page number: " << i << endl;
             //do the writing
             memcpy((char*)buffer + *freeSpaceOffset, writeBuffer, writeBufferOffset);
             struct TableSlot *newSlot =(struct TableSlot*) malloc(sizeof(struct TableSlot));
             newSlot->ridNum.pageNum = i;
             newSlot->ridNum.slotNum = *slots + 1;
             newSlot->offsetInBytes = *freeSpaceOffset + writeBufferOffset;
-            memcpy((char*)buffer+(4088 - ((*slots + 1) * 12)), newSlot, 12);
-            memset((char*)buffer+4092,newSlot->offsetInBytes, 1);
-            memset((char*)buffer+4088,(int) *slots + 1, 1);
+            memcpy((char*)buffer+(4088 - ((*slots + 1) * 12)), newSlot, sizeof(struct TableSlot));
+            memcpy((char *)buffer + 4092, &newSlot->offsetInBytes, 4);
+            memcpy((char *)buffer + 4088, &newSlot->ridNum.slotNum, 4);
             rid = newSlot->ridNum;
-            fileHandle.writePage(pc, buffer);
+            rc =fileHandle.writePage(i, buffer);
             free(buffer);
             free(newSlot);
             free(writeBuffer);
+            if(rc != 0){
+                return -1;
+            }
             return 0;
         }
         memset(buffer, 0, 4096);
@@ -176,8 +234,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     newSlot->ridNum.slotNum = 1;
     newSlot->offsetInBytes = writeBufferOffset;
     memcpy((char *)buffer + 4076, newSlot, 12);
-    memset((char *)buffer + 4092, newSlot->offsetInBytes, 1);
-    memset((char *)buffer + 4088, 1, 1);
+    memcpy((char *)buffer + 4092, &newSlot->offsetInBytes, 4);
+    memcpy((char *)buffer + 4088, &newSlot->ridNum.slotNum, 4);
     rid = newSlot->ridNum;
     fileHandle.appendPage(buffer);
     free(buffer);
@@ -189,6 +247,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
     unsigned pc = fileHandle.getNumberOfPages();
     // check if the page number exists
+        cout << rid.pageNum << " : " << pc << endl;
     if(rid.pageNum >= pc){
         fprintf(stderr, "Invalid rid: Page Number does not exist\n");
         return -1;
@@ -205,16 +264,37 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
         return -1;
     }
     struct TableSlot *foo =(struct TableSlot*) malloc(12*(*slots));
-    cout << *slots << endl;
+    cout << *slots << " Number of slots" << endl;
     // copies all the table slots into the table slot
     memcpy(foo, (char*)buffer + 4088 -(*slots * 12), *slots * 12);
     for(int i = 0; i < (int)*slots; i++){
-        cout << foo[i].ridNum.slotNum << endl;
+        // cout << foo[i].ridNum.slotNum << endl;
         if(foo[i].ridNum.slotNum == rid.slotNum){
             if(i == 1){
-                memcpy(data, (char*)buffer, foo[i].offsetInBytes);
+                memcpy(data, (char*)buffer, foo[i].offsetInBytes); 
+                cout << "tings" << endl;
+                // void * recordRead = malloc(foo[i].offsetInBytes);
+                // memcpy(recordRead, (char*)buffer, foo[i].offsetInBytes);
+                // int rc = helperReadRecord(recordRead, recordDescriptor, data);
+                // free(recordRead);
+                // if(rc != 0){
+                //     fprintf(stderr, "Error in reading record in correct format!\n");
+                //     free(foo);
+                //     free(buffer);
+                //     return -1;
+                // }
             }else{
                 memcpy(data, (char*)buffer + foo[i-1].offsetInBytes, foo[i].offsetInBytes - foo[i-1].offsetInBytes);
+                // void * recordRead = malloc(foo[i].offsetInBytes - foo[i-1].offsetInBytes);
+                // memcpy(recordRead, (char*)buffer + foo[i-1].offsetInBytes, foo[i].offsetInBytes - foo[i-1].offsetInBytes);
+                // int rc = helperReadRecord(recordRead, recordDescriptor, data);
+                // free(recordRead);
+                // if(rc != 0){
+                //     fprintf(stderr, "Error in reading record in correct format!\n");
+                //     free(foo);
+                //     free(buffer);
+                //     return -1;
+                // }
             }
             free(foo);
             free(buffer);
@@ -225,6 +305,21 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     free(foo);
     free(buffer);
     return -1;
+}
+
+RC helperReadRecord(void* record, const vector<Attribute> &recordDescriptor, void* data){
+    // int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
+    // char * nullFieldsIndicator = (char *)calloc(1, actualByteForNullsIndicator);
+    // memcpy(nullFieldsIndicator, (const char *)data, sizeof(char));
+    // bool nullBit = false;
+    // AttrType type;
+    // for (unsigned int i = 0; i < recordDescriptor.size(); i++){
+    //     nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
+    //     if (!nullBit){
+    //         type = (AttrType)recordDescriptor[i].type
+    //     }
+    // }
+    // return 0;
 }
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {
