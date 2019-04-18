@@ -67,7 +67,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
 //    }
     
     void *writeBuffer = calloc(2000,sizeof(char));
-    int writeBufferOffset= 0;
     int fieldNum = 0;
     // ok
     int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
@@ -86,10 +85,10 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             numNotNull++;
         }
     }
-    writeBufferOffset += numNotNull * sizeof(int);
     //set up write buffer
     memset(writeBuffer, recordDescriptor.size(), sizeof(int));
-    memcpy((char *)writeBuffer + 1,(const char *)data, actualByteForNullsIndicator *sizeof(char));
+    memcpy((char *)writeBuffer + sizeof(int),(const char *)data, actualByteForNullsIndicator *sizeof(char));
+    int writeBufferOffset = numNotNull * sizeof(int) + actualByteForNullsIndicator *sizeof(char) + sizeof(int);
     for (unsigned int i = 0; i < recordDescriptor.size(); i++){
         nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
         if (!nullBit){
@@ -119,6 +118,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             fieldNum ++;
         }
     }
+    cout << "num of non null fields " << fieldNum << endl;
     cout << "this is the write buffer size " << writeBufferOffset <<endl;
     if(tableIndex.size() != 0){
         newSlot.offsetInBytes = tableIndex.back().offsetInBytes + writeBufferOffset +1;
