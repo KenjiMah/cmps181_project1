@@ -56,82 +56,90 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
 }
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
-<<<<<<< HEAD
+//    //get number of slots in page.
+//    int numSlots;
+//    int startOfFreeSpace;
+//    int pageCount = fileHandle.getNumberOfPages()
+//    for(int i = 0; i < pageCount; i++){
+//        fseek (fileHandle.file , -(2)sizeof(int), SEEK_END);
+//        fread(numSlots, sizeof(int), 1, fileHandle.file);
+//        fread(numSlots, sizeof(int), 1, fileHandle.file);
+//    }
+    
+    void *writeBuffer = calloc(2000,sizeof(char));
+    int writeBufferOffset= 0;
+    int fieldNum = 0;
+    // ok
     int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
-    char * nullFieldsIndicator = (char *)malloc(actualByteForNullsIndicator);
-    memcpy(nullFieldsIndicator, (const char *)data, sizeof(char));
+    char *nullFieldsIndicator = (char *)calloc(actualByteForNullsIndicator, sizeof(char));
+    memcpy(nullFieldsIndicator, (const char *)data, actualByteForNullsIndicator * sizeof(char));
     bool nullBit = false;
     AttrType type;
     int offset = actualByteForNullsIndicator;
     TableSlot newSlot;
-    int *intNum = (int *)malloc(sizeof(int));
-    float *floatNum = (float *)malloc(sizeof(float));
+    int *intNum = (int *)calloc(1, sizeof(int));
+    //find out how many not null attributes there are
+    int numNotNull = 0;
+    for (unsigned int i = 0; i < recordDescriptor.size(); i++){
+        nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
+        if (!nullBit){
+            numNotNull++;
+        }
+    }
+    writeBufferOffset += numNotNull * sizeof(int);
+    //set up write buffer
+    memset(writeBuffer, recordDescriptor.size(), sizeof(int));
+    memcpy((char *)writeBuffer + 1,(const char *)data, actualByteForNullsIndicator *sizeof(char));
     for (unsigned int i = 0; i < recordDescriptor.size(); i++){
         nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
         if (!nullBit){
             type = (AttrType)recordDescriptor[i].type;
-            char * varChar;
             switch (type) {
                 case (TypeInt):
-                    memcpy(intNum, (const char *)data + offset, sizeof(int));
+                    memcpy((char *)writeBuffer + writeBufferOffset, (const char *)data + offset, sizeof(int));
+                    writeBufferOffset+= sizeof(int);
                     offset += sizeof(int);
                     break;
                 case (TypeReal):
-                    memcpy(floatNum, (const char *)data + offset, sizeof(float));
+                    memcpy((char *)writeBuffer + writeBufferOffset, (const char *)data + offset, sizeof(float));
+                    writeBufferOffset+= sizeof(float);
                     offset += sizeof(float);
                     break;
                 case (TypeVarChar):
                     memcpy(intNum, (const char *)data + offset, sizeof(int));
                     offset += sizeof(int);
-                    varChar = (char *)calloc(intNum[0], sizeof(char));
-                    memcpy(varChar, (const char *)data + offset, intNum[0] * sizeof(char));
+                    memcpy((char *)writeBuffer + writeBufferOffset, (const char *)data + offset, intNum[0] * sizeof(char));
+                    writeBufferOffset+= (intNum[0] * sizeof(char));
                     offset += (intNum[0] * sizeof(char));
-                    free(varChar);
                     break;
                 default:
                     break;
             }
+            memset((char *)writeBuffer + sizeof(int) + actualByteForNullsIndicator + (fieldNum * sizeof(int)), writeBufferOffset, sizeof(int));
+            fieldNum ++;
         }
     }
-    cout << "this is the size of the offset " << offset <<endl;
+    cout << "this is the write buffer size " << writeBufferOffset <<endl;
     if(tableIndex.size() != 0){
-        newSlot.offsetInBytes = tableIndex.back().offsetInBytes + offset;
+        newSlot.offsetInBytes = tableIndex.back().offsetInBytes + writeBufferOffset +1;
         fseek (fileHandle.file , newSlot.offsetInBytes + 1, SEEK_SET);
         newSlot.ridNum.slotNum = tableIndex.back().ridNum.slotNum + 1;
+        cout << "this is the offset of the first record" << newSlot.offsetInBytes << endl;
     }
     else{
-        newSlot.offsetInBytes = offset - 1;
+        newSlot.offsetInBytes = writeBufferOffset - 1;
         fseek(fileHandle.file , 0 , SEEK_SET);
         newSlot.ridNum.slotNum = 1;
+        cout << "this is the offset of the first record" << newSlot.offsetInBytes << endl;
     }
     printRecord(recordDescriptor, (const void*)data);
     cout << endl;
     newSlot.ridNum.pageNum = 1;
-    fwrite((const char *)data, sizeof(char), offset, fileHandle.file);
+    fwrite((const char *)writeBuffer, sizeof(char), writeBufferOffset, fileHandle.file);
     tableIndex.push_back(newSlot);
+    free(writeBuffer);
     free(intNum);
-    free(floatNum);
     free(nullFieldsIndicator);
-=======
-    unsigned pc = fileHandle.getNumberOfPages();
-    unsigned x = 0;
-    if(pc == 0){
-        // do the writing
-        fileHandle.appendPage(data);
-        return 0;
-    }
-    void * buffer = malloc(PAGE_SIZE);
-    for(int i; i < pc; i++){
-        fileHandle.readPage(i, buffer);
-        if((unsigned) (&buffer + 4092) > x+4){
-            //do the writing
-            free(buffer);
-            return 0;
-        }
-    }
-    // do the writing
-    fileHandle.appendPage(data);
->>>>>>> kiran
     return 0;
 }
 
@@ -158,13 +166,13 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {
     int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
-    char * nullFieldsIndicator = (char *)malloc(actualByteForNullsIndicator);
+    char * nullFieldsIndicator = (char *)calloc(1, actualByteForNullsIndicator);
     memcpy(nullFieldsIndicator, (const char *)data, sizeof(char));
     bool nullBit = false;
     AttrType type;
     int offset = actualByteForNullsIndicator;
-    int *intNum = (int *)malloc(sizeof(int));
-    float *floatNum = (float *)malloc(sizeof(float));
+    int *intNum = (int *)calloc(1, sizeof(int));
+    float *floatNum = (float *)calloc(1, sizeof(float));
     char *varChar;
     for (unsigned int i = 0; i < recordDescriptor.size(); i++){
         nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
@@ -184,7 +192,7 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
                 case (TypeVarChar):
                     memcpy(intNum, (const char *)data + offset, sizeof(int));
                     offset += sizeof(int);
-                    varChar = (char *)malloc(intNum[0] * sizeof(char));
+                    varChar = (char *)calloc(intNum[0], sizeof(char));
                     memcpy(varChar, (const char *)data + offset, intNum[0] * sizeof(char));
                     offset += (intNum[0] * sizeof(char));
                     cout << recordDescriptor[i].name << ": " << varChar << "  ";
@@ -197,9 +205,6 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
         else cout << recordDescriptor[i].name << ": " << "NULL  ";
     }
     cout << endl;
-    if(tableIndex.size()!= 0){
-        cout << tableIndex.back().offsetInBytes << endl;
-    }
     free(intNum);
     free(floatNum);
     free(nullFieldsIndicator);
