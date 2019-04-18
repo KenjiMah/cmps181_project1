@@ -129,8 +129,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         newSlot->ridNum.slotNum = 1;
         newSlot->offsetInBytes = writeBufferOffset;
         memcpy((char *)buffer + 4076, newSlot, 12);
-        memset((char *)buffer + 4092, newSlot->offsetInBytes, 4);
-        memset((char *)buffer + 4088, 1, 4);
+        memset((char *)buffer + 4092, newSlot->offsetInBytes, 1);
+        memset((char *)buffer + 4088, 1, 1);
+        rid = newSlot->ridNum;
         fileHandle.appendPage(buffer);
         free(buffer);
         free(newSlot);
@@ -156,8 +157,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             newSlot->ridNum.slotNum = *slots + 1;
             newSlot->offsetInBytes = *freeSpaceOffset + writeBufferOffset;
             memcpy((char*)buffer+(4088 - ((*slots + 1) * 12)), newSlot, 12);
-            memset((char*)buffer+4092,newSlot->offsetInBytes, 4);
-            memset((char*)buffer+4088,(int) *slots + 1, 4);
+            memset((char*)buffer+4092,newSlot->offsetInBytes, 1);
+            memset((char*)buffer+4088,(int) *slots + 1, 1);
+            rid = newSlot->ridNum;
             fileHandle.writePage(pc, buffer);
             free(buffer);
             free(newSlot);
@@ -173,8 +175,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     newSlot->ridNum.slotNum = 1;
     newSlot->offsetInBytes = writeBufferOffset;
     memcpy((char *)buffer + 4076, newSlot, 12);
-    memset((char *)buffer + 4092, newSlot->offsetInBytes, 4);
-    memset((char *)buffer + 4088, 1, 4);
+    memset((char *)buffer + 4092, newSlot->offsetInBytes, 1);
+    memset((char *)buffer + 4088, 1, 1);
+    rid = newSlot->ridNum;
     fileHandle.appendPage(buffer);
     free(buffer);
     free(newSlot);
@@ -192,25 +195,37 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     void * buffer = malloc(PAGE_SIZE);
     fileHandle.readPage(rid.pageNum, buffer);
     // get number of records in the page
-    int* slots;
-    slots = (int*)((char*)buffer + 4088);
+    unsigned* slots;
+    slots = (unsigned*)((char*)buffer + 4088);
     if(*slots == 0){
         fprintf(stderr, "No records are stored on this page!\n");
         free(buffer);
         return -1;
     }
-    struct TableSlot *foo =(struct TableSlot*) malloc(sizeof(struct TableSlot)*(*slots));
+    struct TableSlot *foo =(struct TableSlot*) malloc(12*(*slots));
+    cout << *slots << endl;
     // copies all the table slots into the table slot
     memcpy(foo, (char*)buffer + 4088 -(*slots * 12), *slots * 12);
-    for(int i = 0; i < *slots; i++){
+    for(int i = 0; i < (int)*slots; i++){
+        cout << foo[i].ridNum.slotNum << endl;
         if(foo[i].ridNum.slotNum == rid.slotNum){
+<<<<<<< HEAD
             cout << "This is the offset: " << foo[i].offsetInBytes << endl;
             
+=======
+            if(i == 1){
+                memcpy(data, (char*)buffer, foo[i].offsetInBytes);
+            }else{
+                memcpy(data, (char*)buffer + foo[i-1].offsetInBytes, foo[i].offsetInBytes - foo[i-1].offsetInBytes);
+            }
+            free(foo);
+>>>>>>> kiran
             free(buffer);
             return 0;
         }
     }
     fprintf(stderr, "Invalid rid: Slot number not found on page!\n");
+    free(foo);
     free(buffer);
     return -1;
 }
