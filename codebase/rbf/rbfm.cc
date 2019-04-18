@@ -130,8 +130,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         newSlot->ridNum.slotNum = 1;
         newSlot->offsetInBytes = writeBufferOffset;
         memcpy((char *)buffer + 4076, newSlot, 12);
-        memset((char *)buffer + 4092, newSlot->offsetInBytes, 4);
-        memset((char *)buffer + 4088, 1, 4);
+        memset((char *)buffer + 4092, newSlot->offsetInBytes, 1);
+        memset((char *)buffer + 4088, 1, 1);
+        rid = newSlot->ridNum;
         fileHandle.appendPage(buffer);
         free(buffer);
         free(newSlot);
@@ -157,8 +158,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             newSlot->ridNum.slotNum = *slots + 1;
             newSlot->offsetInBytes = *freeSpaceOffset + writeBufferOffset;
             memcpy((char*)buffer+(4088 - ((*slots + 1) * 12)), newSlot, 12);
-            memset((char*)buffer+4092,newSlot->offsetInBytes, 4);
-            memset((char*)buffer+4088,(int) *slots + 1, 4);
+            memset((char*)buffer+4092,newSlot->offsetInBytes, 1);
+            memset((char*)buffer+4088,(int) *slots + 1, 1);
+            rid = newSlot->ridNum;
             fileHandle.writePage(pc, buffer);
             free(buffer);
             free(newSlot);
@@ -174,8 +176,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     newSlot->ridNum.slotNum = 1;
     newSlot->offsetInBytes = writeBufferOffset;
     memcpy((char *)buffer + 4076, newSlot, 12);
-    memset((char *)buffer + 4092, newSlot->offsetInBytes, 4);
-    memset((char *)buffer + 4088, 1, 4);
+    memset((char *)buffer + 4092, newSlot->offsetInBytes, 1);
+    memset((char *)buffer + 4088, 1, 1);
+    rid = newSlot->ridNum;
     fileHandle.appendPage(buffer);
     free(buffer);
     free(newSlot);
@@ -194,48 +197,79 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     void * buffer = malloc(PAGE_SIZE);
     fileHandle.readPage(rid.pageNum, buffer);
     // get number of records in the page
-    int* slots;
-    slots = (int*)((char*)buffer + 4088);
+    unsigned* slots;
+    slots = (unsigned*)((char*)buffer + 4088);
     if(*slots == 0){
         fprintf(stderr, "No records are stored on this page!\n");
         free(buffer);
         return -1;
     }
-    struct TableSlot *foo =(struct TableSlot*) malloc(sizeof(struct TableSlot)*(*slots));
+    struct TableSlot *foo =(struct TableSlot*) malloc(12*(*slots));
+    cout << *slots << endl;
     // copies all the table slots into the table slot
     memcpy(foo, (char*)buffer + 4088 -(*slots * 12), *slots * 12);
-    for(int i = 0; i < *slots; i++){
+    for(int i = 0; i < (int)*slots; i++){
+        cout << foo[i].ridNum.slotNum << endl;
         if(foo[i].ridNum.slotNum == rid.slotNum){
-            cout << "This is the offset: " << foo[i].offsetInBytes << endl;
+            if(i == 1){
+                memcpy(data, (char*)buffer, foo[i].offsetInBytes);
+            }else{
+                memcpy(data, (char*)buffer + foo[i-1].offsetInBytes, foo[i].offsetInBytes - foo[i-1].offsetInBytes);
+            }
+            free(foo);
             free(buffer);
             return 0;
         }
     }
     fprintf(stderr, "Invalid rid: Slot number not found on page!\n");
+    free(foo);
     free(buffer);
     return -1;
 }
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {
-    // (e.g., age: 24  height: 6.1  salary: 9000
-    //        age: NULL  height: 7.5  salary: 7500)
-//    char* buffer = NULL;
-//    memcpy(buffer, data, sizeof(char));
-//    cout << "test success" << endl;
-    char * nullFieldsIndicator = (char *)malloc(1);
+    int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
+    char * nullFieldsIndicator = (char *)calloc(1, actualByteForNullsIndicator);
     memcpy(nullFieldsIndicator, (const char *)data, sizeof(char));
-    int counter = 0;
     bool nullBit = false;
+    AttrType type;
+    int offset = actualByteForNullsIndicator;
+    int *intNum = (int *)calloc(1, sizeof(int));
+    float *floatNum = (float *)calloc(1, sizeof(float));
+    char *varChar;
     for (unsigned int i = 0; i < recordDescriptor.size(); i++){
-        nullBit = nullFieldsIndicator[0] & (1 << (8-i-1));
+        nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
         if (!nullBit){
-            cout << recordDescriptor[i].name << " Attr Type: " << (AttrType)recordDescriptor[i].type << " Attr Len: " << recordDescriptor[i].length << endl;
-
+            type = (AttrType)recordDescriptor[i].type;
+            switch (type) {
+                case (TypeInt):
+                    memcpy(intNum, (const char *)data + offset, sizeof(int));
+                    offset += sizeof(int);
+                    cout << recordDescriptor[i].name << ": " << intNum[0] << "  ";
+                    break;
+                case (TypeReal):
+                    memcpy(floatNum, (const char *)data + offset, sizeof(float));
+                    offset += sizeof(float);
+                    cout << recordDescriptor[i].name << ": " << floatNum[0] << "  ";
+                    break;
+                case (TypeVarChar):
+                    memcpy(intNum, (const char *)data + offset, sizeof(int));
+                    offset += sizeof(int);
+                    varChar = (char *)calloc(intNum[0], sizeof(char));
+                    memcpy(varChar, (const char *)data + offset, intNum[0] * sizeof(char));
+                    offset += (intNum[0] * sizeof(char));
+                    cout << recordDescriptor[i].name << ": " << varChar << "  ";
+                    free(varChar);
+                    break;
+                default:
+                    break;
+            }
         }
         else cout << recordDescriptor[i].name << ": " << "NULL  ";
-        counter ++;
     }
-    printf("\n%d\n", nullFieldsIndicator[5]);
     cout << endl;
+    free(intNum);
+    free(floatNum);
+    free(nullFieldsIndicator);
     return 0;
 }
