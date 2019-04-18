@@ -69,11 +69,6 @@ public:
 class RecordBasedFileManager
 {
 public:
-    struct TableSlot{
-        RID ridNum;
-        int offsetInBytes;
-    };
-    vector<TableSlot> tableIndex;
   static RecordBasedFileManager* instance();
 
   RC createFile(const string &fileName);

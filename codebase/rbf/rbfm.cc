@@ -61,23 +61,8 @@ struct TableSlot{
 };
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
-<<<<<<< HEAD
-//    //get number of slots in page.
-//    int numSlots;
-//    int startOfFreeSpace;
-//    int pageCount = fileHandle.getNumberOfPages()
-//    for(int i = 0; i < pageCount; i++){
-//        fseek (fileHandle.file , -(2)sizeof(int), SEEK_END);
-//        fread(numSlots, sizeof(int), 1, fileHandle.file);
-//        fread(numSlots, sizeof(int), 1, fileHandle.file);
-//    }
-    
-    void *writeBuffer = calloc(2000,sizeof(char));
-=======
-        
     void *writeBuffer = calloc(2000,sizeof(char));
     int writeBufferOffset= 0;
->>>>>>> kiran
     int fieldNum = 0;
     // ok
     int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
@@ -86,10 +71,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     bool nullBit = false;
     AttrType type;
     int offset = actualByteForNullsIndicator;
-<<<<<<< HEAD
-    TableSlot newSlot;
-=======
->>>>>>> kiran
     int *intNum = (int *)calloc(1, sizeof(int));
     //find out how many not null attributes there are
     int numNotNull = 0;
@@ -98,40 +79,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         if (!nullBit){
             numNotNull++;
         }
-<<<<<<< HEAD
-    }
-    //set up write buffer
-    memset(writeBuffer, recordDescriptor.size(), sizeof(int));
-    memcpy((char *)writeBuffer + sizeof(int),(const char *)data, actualByteForNullsIndicator *sizeof(char));
-    int writeBufferOffset = numNotNull * sizeof(int) + actualByteForNullsIndicator *sizeof(char) + sizeof(int);
-    for (unsigned int i = 0; i < recordDescriptor.size(); i++){
-        nullBit = nullFieldsIndicator[(int)(i/8)] & (1 << (8-(i%8)-1));
-        if (!nullBit){
-            type = (AttrType)recordDescriptor[i].type;
-            switch (type) {
-                case (TypeInt):
-                    memcpy((char *)writeBuffer + writeBufferOffset, (const char *)data + offset, sizeof(int));
-                    writeBufferOffset+= sizeof(int);
-                    offset += sizeof(int);
-                    break;
-                case (TypeReal):
-                    memcpy((char *)writeBuffer + writeBufferOffset, (const char *)data + offset, sizeof(float));
-                    writeBufferOffset+= sizeof(float);
-                    offset += sizeof(float);
-                    break;
-                case (TypeVarChar):
-                    memcpy(intNum, (const char *)data + offset, sizeof(int));
-                    offset += sizeof(int);
-                    memcpy((char *)writeBuffer + writeBufferOffset, (const char *)data + offset, intNum[0] * sizeof(char));
-                    writeBufferOffset+= (intNum[0] * sizeof(char));
-                    offset += (intNum[0] * sizeof(char));
-                    break;
-                default:
-                    break;
-            }
-            memset((char *)writeBuffer + sizeof(int) + actualByteForNullsIndicator + (fieldNum * sizeof(int)), writeBufferOffset, sizeof(int));
-            fieldNum ++;
-=======
     }
     writeBufferOffset += numNotNull * sizeof(int);
     //set up write buffer
@@ -174,7 +121,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     int x = 0;
     // malloc size for reading pages
     void * buffer = malloc(PAGE_SIZE);
-    cout << "testste" << endl;
     // Check if there are any pages
     if(pc == 0){
         memcpy(buffer, writeBuffer, writeBufferOffset);
@@ -217,34 +163,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
             free(newSlot);
             free(writeBuffer);
             return 0;
->>>>>>> kiran
         }
         memset(buffer, 0, 4096);
     }
-<<<<<<< HEAD
-    cout << "num of non null fields " << fieldNum << endl;
-    cout << "this is the write buffer size " << writeBufferOffset <<endl;
-    if(tableIndex.size() != 0){
-        newSlot.offsetInBytes = tableIndex.back().offsetInBytes + writeBufferOffset +1;
-        fseek (fileHandle.file , newSlot.offsetInBytes + 1, SEEK_SET);
-        newSlot.ridNum.slotNum = tableIndex.back().ridNum.slotNum + 1;
-        cout << "this is the offset of the first record" << newSlot.offsetInBytes << endl;
-    }
-    else{
-        newSlot.offsetInBytes = writeBufferOffset - 1;
-        fseek(fileHandle.file , 0 , SEEK_SET);
-        newSlot.ridNum.slotNum = 1;
-        cout << "this is the offset of the first record" << newSlot.offsetInBytes << endl;
-    }
-    printRecord(recordDescriptor, (const void*)data);
-    cout << endl;
-    newSlot.ridNum.pageNum = 1;
-    fwrite((const char *)writeBuffer, sizeof(char), writeBufferOffset, fileHandle.file);
-    tableIndex.push_back(newSlot);
-    free(writeBuffer);
-    free(intNum);
-    free(nullFieldsIndicator);
-=======
     // if none of the pages have enough size append new file with correct data
     memcpy(buffer, writeBuffer, writeBufferOffset);
     struct TableSlot *newSlot = (struct TableSlot *)malloc(sizeof(struct TableSlot));
@@ -258,31 +179,9 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     free(buffer);
     free(newSlot);
     free(writeBuffer);
->>>>>>> kiran
     return 0;
 }
-
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
-<<<<<<< HEAD
-    for(int i = 0; i < (int)tableIndex.size(); i++){
-        if(tableIndex[i].ridNum.pageNum == rid.pageNum && tableIndex[i].ridNum.slotNum == rid.slotNum){
-            if(i == 0){
-                fseek(fileHandle.file , 0 , SEEK_SET);
-                fread((char *)data, sizeof(char), tableIndex[i].offsetInBytes + 1, fileHandle.file);
-                
-            }
-            else{
-                fseek(fileHandle.file , tableIndex[i-1].offsetInBytes + 1 , SEEK_SET);
-                fread((char *)data, sizeof(char), tableIndex[i].offsetInBytes - tableIndex[i-1].offsetInBytes, fileHandle.file);
-            }
-        }
-        else{
-            perror("RID could not be found");
-            return -1;
-        }
-    }
-    return 0;
-=======
     unsigned pc = fileHandle.getNumberOfPages();
     // check if the page number exists
     if(rid.pageNum >= pc){
@@ -306,6 +205,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     for(int i = 0; i < *slots; i++){
         if(foo[i].ridNum.slotNum == rid.slotNum){
             cout << "This is the offset: " << foo[i].offsetInBytes << endl;
+            
             free(buffer);
             return 0;
         }
@@ -313,7 +213,6 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     fprintf(stderr, "Invalid rid: Slot number not found on page!\n");
     free(buffer);
     return -1;
->>>>>>> kiran
 }
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {
