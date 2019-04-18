@@ -53,29 +53,68 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
     return 0;
 }
 
+struct TableSlot{
+    RID ridNum;
+    int offsetInBytes;
+};
+
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
     unsigned pc = fileHandle.getNumberOfPages();
     unsigned x = 0;
+    // Check if there are any pages
     if(pc == 0){
         // do the writing
         fileHandle.appendPage(data);
         return 0;
     }
+    // malloc size for reading pages
     void * buffer = malloc(PAGE_SIZE);
-    for(int i; i < pc; i++){
+    unsigned* freeSpace;
+    // read each page and determine if there is enough freespace
+    for(unsigned i = 0; i < pc; i++){
         fileHandle.readPage(i, buffer);
-        if((unsigned) (&buffer + 4092) > x+4){
+        // gets the number of free space
+        freeSpace =(unsigned*) (buffer + 4092);
+        // checks if the freespace is enough
+        if(*freeSpace > x){
             //do the writing
             free(buffer);
             return 0;
         }
     }
+    // if none of the pages have enough size append new file with correct data
+    free(buffer);
     // do the writing
     fileHandle.appendPage(data);
     return 0;
 }
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
+    unsigned pc = fileHandle.getNumberOfPages();
+    // check if the page number exists
+    if(rid.pageNum >= pc){
+        fprintf(stderr, "Invalid rid: Page Number does not exist\n");
+        return -1;
+    }
+    // if page exists read it into the buffer
+    void * buffer = malloc(PAGE_SIZE);
+    fileHandle.readPage(rid.pageNum, buffer);
+    // get number of records in the page
+    int* slots;
+    slots = (int*)(buffer + 4088);
+    if(*slots == 0){
+        fprintf(stderr, "No records are stored on this page!\n");
+        return -1;
+    }
+    struct TableSlot *foo =(struct TableSlot*) malloc(sizeof(struct TableSlot)*(*slots));
+    memcpy(foo, buffer + 4088 -(*slots * 12), *slots * 12);
+    for(int i = 0; i < *slots; i++){
+        if(foo[i].ridNum.slotNum == rid.slotNum){
+            cout << "This is the offset: " << foo[i].offsetInBytes << endl;
+            return 0;
+        }
+    }
+    fprintf(stderr, "Invalid rid: Slot number not found on page!\n");
     return -1;
 }
 
