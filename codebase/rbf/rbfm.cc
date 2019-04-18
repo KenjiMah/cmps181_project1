@@ -56,6 +56,7 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
 }
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
+<<<<<<< HEAD
     int actualByteForNullsIndicator = ceil((double) recordDescriptor.size() / CHAR_BIT);
     char * nullFieldsIndicator = (char *)malloc(actualByteForNullsIndicator);
     memcpy(nullFieldsIndicator, (const char *)data, sizeof(char));
@@ -111,6 +112,26 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     free(intNum);
     free(floatNum);
     free(nullFieldsIndicator);
+=======
+    unsigned pc = fileHandle.getNumberOfPages();
+    unsigned x = 0;
+    if(pc == 0){
+        // do the writing
+        fileHandle.appendPage(data);
+        return 0;
+    }
+    void * buffer = malloc(PAGE_SIZE);
+    for(int i; i < pc; i++){
+        fileHandle.readPage(i, buffer);
+        if((unsigned) (&buffer + 4092) > x+4){
+            //do the writing
+            free(buffer);
+            return 0;
+        }
+    }
+    // do the writing
+    fileHandle.appendPage(data);
+>>>>>>> kiran
     return 0;
 }
 
