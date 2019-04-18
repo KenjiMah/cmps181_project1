@@ -80,6 +80,7 @@ RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle)
         return -1;
     }
     // void * buffer = malloc(sizeof(unsigned int));
+    // Reads in the counters that are stored in the first 16 bytes of the file
     fread(&fileHandle.readPageCounter, sizeof(unsigned), 1, fileHandle.file);
     fread(&fileHandle.writePageCounter, sizeof(unsigned), 1, fileHandle.file);
     fread(&fileHandle.appendPageCounter, sizeof(unsigned), 1, fileHandle.file);
@@ -101,6 +102,7 @@ RC PagedFileManager::closeFile(FileHandle &fileHandle)
     }
     // fseek(fileHandle.file, 0, SEEK_SET);
     rewind(fileHandle.file);
+    // Writes the updated counters to the page
     fwrite(&fileHandle.readPageCounter, sizeof(unsigned int), 1, fileHandle.file);
     // fseek(fileHandle.file, sizeof(unsigned), SEEK_SET);
     fwrite(&fileHandle.writePageCounter, sizeof(unsigned int), 1, fileHandle.file);
@@ -181,6 +183,7 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
         fprintf(stderr, "Error: %s\n", strerror(errno));
         return -1;
     }
+    cout << "Size of writing: " << sizeof(data)<< endl;
     fwrite(data, 4096, 1, file);
     writePageCounter++;
     return 0;
