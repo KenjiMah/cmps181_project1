@@ -161,7 +161,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     free(intNum);
     free(nullFieldsIndicator);
     unsigned pc = fileHandle.getNumberOfPages();
-    int x = 0;
     // malloc size for reading pages
     void * buffer = calloc(PAGE_SIZE, sizeof(char));
     // Checks the return code for any filehandle functions

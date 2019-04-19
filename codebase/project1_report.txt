@@ -1,22 +1,30 @@
 1. Basic information
 Team number: 10
-Student ID of submitter: 
-Student Name of submitter: 
-Other Team Members:
+Student ID of submitter: 1593676
+Student Name of submitter: Kenji Mah
+Other Team Members: Kiran Gurung 
 
 
 2. Internal Record Format
 - Show your record format design and describe how your design satisfies O(1) field access. If not, just mention that you haven't implemented this feature.
 - Describe how you store a VarChar field.
+For our records we stored it the same way shown in lecture 3 slide 12:
+(number of fields) (null bytes) ([end of field 1] [end of field 2] --- [end of field n]) (fields);
+
+note: the end of fields are only for non null fields.
+in order to access a desired field in O(1) time you would first need to check the null bits to see if the field is null. If it isn't then you check the corresponding end of field and the end of the previous field to get the data requested.
 
 
 3. Page Format
 - Show your page format design
+For our page format we decided to replicate the slide from lecture 3 slide 17; a mini diagram would look like the following:
+([record 1] --- [record n]) (free space) (slot directory) (number of slots) (offset to start of free space)
 
+The slot directory would contain the RID's and the offsets of the end of each record. Therefore the last record's offset would also be the same as the offset to the start of free space. 
 
 4. Implementation Detail
 - Other implementation details goes here.
-
+accessing pages can be one in O(n) time because we just appended to the end of a file if a new page was needed, so in order to traverse through the pages you would calculate the offset in the file by multiplying the page number and the page size plus 16 bytes. the 16 bytes are for recording the counters about read, write, append and page, page counters.  
 
 5. Other (optional)
 - Freely use this section to tell us about other things related to the project 1 (optional)

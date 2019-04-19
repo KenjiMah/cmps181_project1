@@ -180,7 +180,6 @@ RC FileHandle::appendPage(const void *data)
     }
     // Offset to pointing to the end of the new page
     long offset = ((pageCounter) * 4096) + 16;
-    unsigned check = 0;
     fseek(file, offset, SEEK_SET);
     fwrite(data, 4096, 1, file);
     // Write the table/array containing the freespace, etc...
