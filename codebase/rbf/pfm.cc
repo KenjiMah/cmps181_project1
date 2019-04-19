@@ -70,7 +70,6 @@ RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle)
     const char * c = fileName.c_str();
     FILE* check = fopen(c, "r");
     if(check == nullptr){
-        // fprintf(stderr, "Error: %s", strerror(errno));
         fprintf(stderr, "Attempting to open file that does not exist!\n");
         return -1;
     }
@@ -85,11 +84,6 @@ RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle)
     fread(&fileHandle.writePageCounter, sizeof(unsigned), 1, fileHandle.file);
     fread(&fileHandle.appendPageCounter, sizeof(unsigned), 1, fileHandle.file);
     fread(&fileHandle.pageCounter, sizeof(unsigned), 1, fileHandle.file);
-    cout << "READING " << fileHandle.readPageCounter << endl;
-    cout << fileHandle.pageCounter << endl;
-    cout << fileHandle.appendPageCounter << endl;
-    cout << fileHandle.writePageCounter << endl;
-
     return 0;
 }
 
@@ -132,16 +126,6 @@ FileHandle::~FileHandle()
 {
 }
 
-typedef struct{
-    int pageNum;
-
-}page;
-struct fileStats{
-    unsigned rpc = 0;
-    unsigned wpc = 0;
-    unsigned apc = 0;
-    unsigned pc = 0;
-};
 
 RC FileHandle::readPage(PageNum pageNum, void *data)
 {
@@ -158,7 +142,6 @@ RC FileHandle::readPage(PageNum pageNum, void *data)
         fprintf(stderr, "Error: %s\n", strerror(errno));
         return -1;
     }
-    // cout << "Bytes read: " << fread(*&data, sizeof(unsigned), 4096, file) << endl;
     if(fread(data, 4096, 1, file) != 1){
         fprintf(stderr, "File corrupt!\n");
         return -1;
@@ -183,7 +166,6 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
         fprintf(stderr, "Error: %s\n", strerror(errno));
         return -1;
     }
-    cout << "Size of writing: " << sizeof(data)<< endl;
     fwrite(data, 4096, 1, file);
     writePageCounter++;
     return 0;
